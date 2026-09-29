@@ -1,0 +1,642 @@
+{
+  "info": {
+    "name": "ParkBay API",
+    "description": "Postman collection for the ParkBay parking slot booking API. Register and log in first. For admin-only requests, promote the test user to admin in MongoDB, then run Login again so {{token}} contains the admin JWT. The Overlapping Booking request intentionally expects HTTP 400.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000/api"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "otherToken",
+      "value": ""
+    },
+    {
+      "key": "email",
+      "value": ""
+    },
+    {
+      "key": "otherEmail",
+      "value": ""
+    },
+    {
+      "key": "password",
+      "value": "Secret123!"
+    },
+    {
+      "key": "slotId",
+      "value": ""
+    },
+    {
+      "key": "secondSlotId",
+      "value": ""
+    },
+    {
+      "key": "bookingId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Register",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"ParkBay Test User\",\n  \"email\": \"parkbay-{{$timestamp}}@example.com\",\n  \"password\": \"{{password}}\"\n}"
+        },
+        "url": "{{baseUrl}}/auth/register",
+        "description": "Expected: 201. Saves the generated email and returned token."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Register returns 201', function () { pm.response.to.have.status(201); });",
+              "const data = pm.response.json();",
+              "const body = JSON.parse(pm.request.body.raw);",
+              "pm.collectionVariables.set('email', body.email);",
+              "pm.collectionVariables.set('token', data.token);",
+              "if (data.user && data.user._id) pm.collectionVariables.set('userId', data.user._id);",
+              "pm.test('Register returns a token', function () { pm.expect(data.token).to.be.a('string').and.not.empty; });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Login",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+        },
+        "url": "{{baseUrl}}/auth/login",
+        "description": "Expected: 200. Replaces {{token}} with the login response token."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Login returns 200', function () { pm.response.to.have.status(200); });",
+              "pm.collectionVariables.set('token', pm.response.json().token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Get Current User",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/auth/me",
+        "description": "Expected: 200 with {{token}}. Remove the token and rerun to verify 401."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Get current user returns 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('Password is not exposed', function () { pm.expect(pm.response.json().user.password).to.be.undefined; });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Create Slot (Admin)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"slotNumber\": \"A-101\",\n  \"location\": \"North Garage\",\n  \"pricePerHour\": 5,\n  \"isActive\": true\n}"
+        },
+        "url": "{{baseUrl}}/slots",
+        "description": "Expected: 201 with an admin token. A normal user should receive 403."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Admin slot creation returns 201', function () { pm.response.to.have.status(201); });",
+              "const data = pm.response.json();",
+              "if (data.slot && data.slot._id) pm.collectionVariables.set('slotId', data.slot._id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Create Second Slot (Admin)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"slotNumber\": \"B-202\",\n  \"location\": \"South Garage\",\n  \"pricePerHour\": 7,\n  \"isActive\": true\n}"
+        },
+        "url": "{{baseUrl}}/slots",
+        "description": "Expected: 201 with an admin token. This second slot is used to verify delete without disrupting booking tests."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Second slot creation returns 201', function () { pm.response.to.have.status(201); });",
+              "const data = pm.response.json();",
+              "if (data.slot && data.slot._id) pm.collectionVariables.set('secondSlotId', data.slot._id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. List Slots",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/slots?page=1&limit=2",
+        "description": "Expected: 200 with at most 2 slots and pagination metadata."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const data = pm.response.json();",
+              "pm.test('List slots returns 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('Page contains at most two slots', function () { pm.expect(data.slots.length).to.be.at.most(2); });",
+              "pm.test('Pagination metadata exists', function () { pm.expect(data).to.have.property('total'); pm.expect(data).to.have.property('pages'); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Get Slot",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/slots/{{slotId}}",
+        "description": "Expected: 200. Use a fake ID to verify 404."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Get slot returns 200', function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. Update Slot (Admin)",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"pricePerHour\": 6\n}"
+        },
+        "url": "{{baseUrl}}/slots/{{slotId}}",
+        "description": "Expected: 200 with an admin token; 403 for a non-admin."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Update slot returns 200', function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "9. Create Booking",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"slot\": \"{{slotId}}\",\n  \"startTime\": \"{{bookingStart}}\",\n  \"endTime\": \"{{bookingEnd}}\"\n}"
+        },
+        "url": "{{baseUrl}}/bookings",
+        "description": "Expected: 201. Saves bookingId for later requests."
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const now = Date.now();",
+              "pm.collectionVariables.set('bookingStart', new Date(now - 60 * 60 * 1000).toISOString());",
+              "pm.collectionVariables.set('bookingEnd', new Date(now + 60 * 60 * 1000).toISOString());",
+              "pm.collectionVariables.set('overlapStart', new Date(now - 30 * 60 * 1000).toISOString());",
+              "pm.collectionVariables.set('overlapEnd', new Date(now + 2 * 60 * 60 * 1000).toISOString());",
+              "pm.collectionVariables.set('updateEnd', new Date(now + 90 * 60 * 1000).toISOString());",
+              "pm.collectionVariables.set('availabilityFrom', new Date(now - 30 * 60 * 1000).toISOString());",
+              "pm.collectionVariables.set('availabilityTo', new Date(now + 30 * 60 * 1000).toISOString());"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Create booking returns 201', function () { pm.response.to.have.status(201); });",
+              "const data = pm.response.json();",
+              "if (data.booking && data.booking._id) pm.collectionVariables.set('bookingId', data.booking._id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10. Create Overlapping Booking (Expected 400)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"slot\": \"{{slotId}}\",\n  \"startTime\": \"{{overlapStart}}\",\n  \"endTime\": \"{{overlapEnd}}\"\n}"
+        },
+        "url": "{{baseUrl}}/bookings",
+        "description": "Intentionally overlaps the first booking. Expected: 400."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Overlapping booking returns 400', function () { pm.response.to.have.status(400); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11. List Bookings (Admin)",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/bookings?page=1&limit=10",
+        "description": "Expected: 200 with an admin token."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('List bookings returns 200', function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12. Get Booking (Owner/Admin)",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/bookings/{{bookingId}}",
+        "description": "Expected: 200 for the booking owner or an admin."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Get booking returns 200', function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13. Register Other User",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"ParkBay Other User\",\n  \"email\": \"parkbay-other-{{$timestamp}}@example.com\",\n  \"password\": \"{{password}}\"\n}"
+        },
+        "url": "{{baseUrl}}/auth/register",
+        "description": "Setup request for the ownership authorization check."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Other user registration returns 201', function () { pm.response.to.have.status(201); });",
+              "const data = pm.response.json();",
+              "const body = JSON.parse(pm.request.body.raw);",
+              "pm.collectionVariables.set('otherEmail', body.email);",
+              "pm.collectionVariables.set('otherToken', data.token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "14. Login Other User",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{otherEmail}}\",\n  \"password\": \"{{password}}\"\n}"
+        },
+        "url": "{{baseUrl}}/auth/login",
+        "description": "Setup request that refreshes {{otherToken}}."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Other user login returns 200', function () { pm.response.to.have.status(200); });",
+              "pm.collectionVariables.set('otherToken', pm.response.json().token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "15. Get Booking As Other User (Expected 403)",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{otherToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "url": "{{baseUrl}}/bookings/{{bookingId}}",
+        "description": "Expected: 403 after setting {{otherToken}} with a separate user login."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Other user receives 403', function () { pm.response.to.have.status(403); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "16. Update Booking",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"endTime\": \"{{updateEnd}}\"\n}"
+        },
+        "url": "{{baseUrl}}/bookings/{{bookingId}}",
+        "description": "Expected: 200 for the booking owner or an admin."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Update booking returns 200', function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "17. Available Slots",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/slots/available?from={{availabilityFrom}}&to={{availabilityTo}}",
+        "description": "Expected: 200. The booked slot should not appear in the response."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const data = pm.response.json();",
+              "pm.test('Available slots returns 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('Booked slot is excluded', function () { pm.expect(data.slots.map(function (slot) { return slot._id; })).to.not.include(pm.collectionVariables.get('slotId')); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18. Checkout Booking",
+      "request": {
+        "method": "PATCH",
+        "url": "{{baseUrl}}/bookings/{{bookingId}}/checkout",
+        "description": "Expected: 200 after the booking start time. Sets status to completed and final totalFee."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const data = pm.response.json();",
+              "pm.test('Checkout returns 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('Booking is completed', function () { pm.expect(data.booking.status).to.eql('completed'); });",
+              "pm.test('Final fee is numeric', function () { pm.expect(data.booking.totalFee).to.be.a('number'); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "19. My Bookings",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/bookings/mine?page=1&limit=10",
+        "description": "Expected: 200 and only the current user's bookings."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('My bookings returns 200', function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "20. Slot Stats",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/slots/stats",
+        "description": "Expected: 200 with totalSlots, activeSlots, currentlyOccupied, occupancyRate, and topBookedSlots."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const data = pm.response.json();",
+              "pm.test('Slot stats returns 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('Slot stats fields exist', function () { pm.expect(data).to.have.property('totalSlots'); pm.expect(data).to.have.property('activeSlots'); pm.expect(data).to.have.property('currentlyOccupied'); pm.expect(data).to.have.property('occupancyRate'); pm.expect(data).to.have.property('topBookedSlots'); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "21. Delete Booking",
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/bookings/{{bookingId}}",
+        "description": "Expected: 200 for the booking owner or an admin."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Delete booking returns 200', function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "22. Delete Second Slot (Admin)",
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/slots/{{secondSlotId}}",
+        "description": "Expected: 200 with an admin token. Use a fake ID to verify 404."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Delete slot returns 200', function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
