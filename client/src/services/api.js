@@ -3,7 +3,7 @@ import axios from 'axios';
 const apiBaseUrl = import.meta.env.VITE_API_URL;
 
 const api = axios.create({
-  baseURL: apiBaseUrl,
+  baseURL: "https://parking-slot-booking-arys.onrender.com",
 });
 
 api.interceptors.request.use((config) => {
